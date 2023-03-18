@@ -21,7 +21,7 @@ jobs:
         run: cargo build --verbose
         if: ${{ steps.release.outputs.release_created }}
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --verbose --all-targets
         if: ${{ steps.release.outputs.release_created }}
       - name: Publish
         run: cargo publish
