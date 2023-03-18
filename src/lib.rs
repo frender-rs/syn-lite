@@ -297,3 +297,144 @@ macro_rules! parse_where_clause {
         }
     };
 }
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_item_fn_finish {
+    (
+        [
+            [
+                output_macro_and_bang! { $($out_macro_and_bang:tt)+ }
+                before! { $($before:tt)* }
+                after! { $($after:tt)* }
+                outer_attrs! $outer_attrs:tt
+                vis! $vis:tt
+                ident! $ident:tt
+            ]
+            generics! $generics:tt
+            paren_inputs! $paren_inputs:tt
+            output! $output:tt
+        ]
+        where_clause! $where_clause:tt
+        rest! $rest:tt // rest tokens after ItemFn
+        inner_attrs! $inner_attrs:tt
+        rest! $stmts:tt // rest tokens after inner_attrs, that are stmts
+    ) => {
+        $($out_macro_and_bang)+ {
+            $($before)*
+            item_fn! {
+                outer_attrs! $outer_attrs
+                vis! $vis
+                sig! {
+                    ident! $ident
+                    generics! $generics
+                    paren_inputs! $paren_inputs
+                    output! $output
+                    where_clause! $where_clause
+                }
+                inner_attrs! $inner_attrs
+                stmts! $stmts
+            }
+            rest! $rest
+            $($after)*
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_item_fn_where_clause_parsed {
+    (
+        $other:tt
+        where_clause! $where_clause:tt
+        rest! {
+            $fn_body:tt
+            $($rest:tt)*
+        }
+    ) => {
+        $crate::parse_inner_attrs! {
+            [$other where_clause! $where_clause rest! { $($rest)* }]
+            $fn_body
+            => $crate::__impl_parse_item_fn_finish!
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_item_fn_generics_parsed {
+    (
+        $other:tt
+        generics! $generics:tt
+        rest! {
+            $paren_inputs:tt
+            $( -> $output_ty:ty )?
+            where
+            $($rest:tt)*
+        }
+    ) => {
+        $crate::parse_where_clause! {
+            [[
+                $other
+                generics! $generics
+                paren_inputs! { $paren_inputs }
+                output! { $( -> $output_ty )? }
+            ]]
+            { where $($rest)* }
+            => $crate::__impl_parse_item_fn_where_clause_parsed!
+        }
+    };
+    (
+        $other:tt
+        generics! $generics:tt
+        rest! {
+            $paren_inputs:tt
+            $( -> $output_ty:ty )?
+            { $($fn_body:tt)* }
+            $($rest:tt)*
+        }
+    ) => {
+        $crate::parse_inner_attrs! {
+            [
+                [
+                    $other
+                    generics! $generics
+                    paren_inputs! { $paren_inputs }
+                    output! { $( -> $output_ty )? }
+                ]
+                where_clause! {}
+                rest! { $($rest)* } // after ItemFn
+            ]
+            { $($fn_body)* }
+            => $crate::__impl_parse_item_fn_finish!
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! parse_item_fn {
+    (
+        $([ $($before:tt)* ])?
+        {
+            $(#$outer_attrs:tt)*
+            $vis:vis fn $name:ident
+            $($rest:tt)*
+        }
+        $([ $($after:tt)* ])?
+        => $($out_macro_and_bang:tt)+
+    ) => {
+        $crate::parse_generics! {
+            [[
+                output_macro_and_bang! { $($out_macro_and_bang)+ }
+                before! { $($($before)*)? }
+                after! { $($($after)*)? }
+                outer_attrs! { $(#$outer_attrs)* }
+                vis! { $vis }
+                ident! { $name }
+            ]]
+            { $($rest)* }
+            []
+            => $crate::__impl_parse_item_fn_generics_parsed!
+        }
+    };
+}
