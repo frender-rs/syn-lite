@@ -160,3 +160,140 @@ macro_rules! parse_generics {
         }
     };
 }
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_where_clause_finish {
+    ({
+        [$($out_macro_and_bang:tt)+]
+        [$($before:tt)*]
+        [$($after:tt)*]
+    } $where_clause:tt $rest:tt) => {
+        $($out_macro_and_bang)+ {
+            $($before)*
+            where_clause! $where_clause
+            rest! $rest
+            $($after)*
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_where_predicate {
+    ({ $($parsed:tt)* } {
+        ,
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        ,
+    } { $($rest)* } $output } };
+    // 'a: 'b + 'c
+    ({ $($parsed:tt)* } {
+        $lt:lifetime : $lt_bound:lifetime $(+ $lt_bounds:lifetime)+
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        $lt : $lt_bound $(+ $lt_bounds)+
+    } { $($rest)* } $output } };
+    // 'a: 'b
+    ({ $($parsed:tt)* } {
+        $lt:lifetime : $lt_bound:lifetime
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        $lt : $lt_bound
+    } { $($rest)* } $output } };
+    // for<'a>
+    ({ $($parsed:tt)* } {
+        for < $($lt:lifetime),* $(,)? >
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        for < $($lt),* >
+    } { $($rest)* } $output } };
+    // __![$raw_where_clause]: __
+    ({ $($parsed:tt)* } {
+        __![$($raw_where_clause:tt)*]: __
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        __![$($raw_where_clause)*]: __
+    } { $($rest)* } $output } };
+    // $ty : $bounds $EOF
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+    } {} $output } };
+    // $ty : $bounds ,
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+        ,
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+        ,
+    } { $($rest)* } $output } };
+    // $ty : $bounds {}
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+        {$($brace:tt)*}
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+    } { {$($brace)*} $($rest)* } } };
+    // $ty : $bounds ;
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+        ;
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+    } { ; $($rest)* } } };
+    // $ty : $bounds :
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+        :
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+    } { : $($rest)* } } };
+    // $ty : $bounds =
+    ({ $($parsed:tt)* } {
+        $ty:ty : $($bound_lt:lifetime)? $(+ $bounds_lt:lifetime)* $( $( + $({$plus_ignore:tt })? )? $( ? $([$relax_ignore:tt])? )? $bounds:path )*
+        =
+        $($rest:tt)*
+    } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output { $($parsed)*
+        $ty : $($bound_lt)? $(+ $bounds_lt)* $( $( + $({$plus_ignore })? )? $( ? $([$relax_ignore])? )? $bounds )*
+    } { = $($rest)* } } };
+    // ($parsed:tt { {$($brace:tt)*} $($rest:tt)* } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output $parsed { {$($brace)*} $($rest)* } } };
+    // ($parsed:tt { ; $($rest:tt)* } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output $parsed { ; $($rest)* } } };
+    // ($parsed:tt { : $($rest:tt)* } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output $parsed { : $($rest)* } } };
+    // ($parsed:tt { = $($rest:tt)* } $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output $parsed { = $($rest)* } } };
+    ($parsed:tt $rest:tt $output:tt) => { $crate::__impl_parse_where_clause_finish! { $output $parsed $rest } };
+}
+
+#[macro_export]
+macro_rules! parse_where_clause {
+    (
+        $([ $($before:tt)* ])?
+        { where $($parse:tt)* }
+        $([ $($after:tt)* ])?
+        => $($out_macro_and_bang:tt)+
+    ) => {
+        $crate::__impl_parse_where_predicate! {
+            { where }
+            {$($parse)*}
+            { [$($out_macro_and_bang)+][$( $($before)* )?][$( $($after)* )?] }
+        }
+    };
+    (
+        $([ $($before:tt)* ])?
+        { $($rest:tt)* }
+        $([ $($after:tt)* ])?
+        => $($out_macro_and_bang:tt)+
+    ) => {
+        $($out_macro_and_bang)+ {
+            $($($before:tt)*)?
+            where_clause! {}
+            rest!         { $($rest)* }
+            $($($after:tt)*)?
+        }
+    };
+}
