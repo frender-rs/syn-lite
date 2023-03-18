@@ -213,7 +213,7 @@ macro_rules! __impl_parse_where_predicate {
         __![$($raw_where_clause:tt)*]: __
         $($rest:tt)*
     } $output:tt) => { $crate::__impl_parse_where_predicate! { { $($parsed)*
-        __![$($raw_where_clause)*]: __
+        $($raw_where_clause)*
     } { $($rest)* } $output } };
     // $ty : $bounds $EOF
     ({ $($parsed:tt)* } {
