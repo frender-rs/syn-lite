@@ -2,6 +2,8 @@
 name = "syn-lite"
 version = "0.1.0"
 edition = "2021"
+description = "limited but lite syntax parsing with only macro_rules"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
