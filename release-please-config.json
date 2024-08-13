@@ -4,6 +4,7 @@
     ".": {}
   },
   "release-type": "rust",
+  "bootstrap-sha": "81af4d2d69689f8fa5b2915afe2c3cfb74bb0757",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true
 }
