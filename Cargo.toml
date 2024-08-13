@@ -1,6 +1,6 @@
 [package]
 name = "syn-lite"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "limited but lite syntax parsing with only macro_rules"
 license = "MIT"

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.1...syn-lite-v0.1.2) (2024-08-13)
+
+
+### Features
+
+* consume_till_outer_gt_inclusive! and consume_optional_angle_bracketed! ([ecc27bf](https://github.com/frender-rs/syn-lite/commit/ecc27bffc8ae7de38aeacb998f782e3cce2dada4))
+
 ## [0.1.1](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.0...syn-lite-v0.1.1) (2024-08-13)
 
 
