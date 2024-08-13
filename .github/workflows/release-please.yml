@@ -5,24 +5,22 @@ on:
 name: release-please
 env:
   CARGO_TERM_COLOR: always
+permissions:
+  contents: write
+  pull-requests: write
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: google-github-actions/release-please-action@v3
-        id: release
-        with:
-          release-type: rust
-          package-name: syn-lite
-
       - uses: actions/checkout@v3
-        if: ${{ steps.release.outputs.release_created }}
       - name: Build
         run: cargo build --verbose
-        if: ${{ steps.release.outputs.release_created }}
       - name: Run tests
         run: cargo test --verbose --all-targets
-        if: ${{ steps.release.outputs.release_created }}
+
+      - uses: googleapis/release-please-action@v4
+        id: release
+
       - name: Publish
         run: cargo publish
         env:
