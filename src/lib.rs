@@ -438,3 +438,824 @@ macro_rules! parse_item_fn {
         }
     };
 }
+
+// region: common utils
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __start_parsing_with {
+    (
+        parse_with {$($parse_with:tt)*}
+        args {
+            on_finish $on_finish:tt
+            $(prepend $output_prepend:tt)?
+            input $input:tt
+            $(append $output_append:tt)?
+        }
+        $(after_input { $($after_input:tt)* })?
+    ) => {
+        $($parse_with)* {
+            {} // initial state
+            $input
+            $input // clone input
+            $($($after_input)*)?
+            {
+                on_finish $on_finish
+                $(prepend $output_prepend)?
+                $(append $output_append)?
+            } // on finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __resolve_finish {
+    (
+        on_finish {
+            on_finish { $($macro_and_bang:tt)* }
+            $(prepend { $($output_prepend:tt)* })?
+            $(append  { $($output_append:tt )* })?
+        }
+        output { $($output:tt)* }
+    ) => {
+        $($macro_and_bang)* {
+            $($($output_prepend)*)?
+            $($output)*
+            $($($output_append)*)?
+        }
+    };
+}
+
+// endregion
+
+// region: consume_till_outer_gt
+
+/// Consume tokens till an outer `>`.
+///
+/// Note that this macro might split the following tokens
+/// if the last `>` is an outer `>` which doesn't have a matched previous `>`:
+/// - `->`
+/// - `=>`
+/// - `>=`
+/// - `>>`
+/// - `>>=`
+#[macro_export]
+macro_rules! consume_till_outer_gt {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__impl_consume_till_outer_gt! }
+            args {
+                $($args)*
+            }
+            after_input {
+                [] // inner `<` list, start with an empty list
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_till_outer_gt {
+    // region: unmatched > or >>
+    // >
+    (
+        $consumed:tt
+        {> $($_rest:tt)*}
+        $rest:tt
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt $consumed
+                gt_and_rest $rest
+            }
+        }
+    };
+    // >=
+    (
+        $consumed:tt
+        {>= $($_rest:tt)*}
+        $rest:tt
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt $consumed
+                gt_and_rest $rest
+            }
+        }
+    };
+    // ->
+    (
+        {$($consumed:tt)*}
+        {-> $($rest:tt)*}
+        $_rest:tt
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt { $($consumed)* - } // split
+                gt_and_rest { > $($rest)* } // split
+            }
+        }
+    };
+    // =>
+    (
+        {$($consumed:tt)*}
+        {=> $($rest:tt)*}
+        $_rest:tt
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt { $($consumed)* = } // split
+                gt_and_rest { > $($rest)* } // split
+            }
+        }
+    };
+    // >> only one matched
+    (
+        {$($consumed:tt)*}
+        {>> $($_rest:tt)*}
+        {>> $($rest:tt )*}
+        [<] // no inner `<` before the second `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt {$($consumed)* >}
+                gt_and_rest { > $($rest)* }
+            }
+        }
+    };
+    // >> neither matched
+    (
+        $consumed:tt
+        {>>    $($_rest:tt)*}
+        $rest:tt
+        [] // no inner `<` before the first `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt $consumed
+                gt_and_rest $rest
+            }
+        }
+    };
+    // >>= only one matched
+    (
+        {$($consumed:tt)*}
+        {>>= $($_rest:tt)*}
+        {>>= $($rest:tt )*}
+        [<] // no inner `<` before the second `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt {$($consumed)* >}
+                gt_and_rest { >= $($rest)* } // split >>= to > and >=
+            }
+        }
+    };
+    // >>= neither matched
+    (
+        $consumed:tt
+        {>>=   $($_rest:tt)*}
+        $rest:tt
+        [] // no inner `<` before the first `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_gt $consumed
+                gt_and_rest $rest
+            }
+        }
+    };
+    // endregion
+
+    // region: < and <<
+    // <
+    (
+        {$($consumed:tt)*}
+        {<     $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* $t]
+            $finish
+        }
+    };
+    // <-
+    (
+        {$($consumed:tt)*}
+        {<-    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* <]
+            $finish
+        }
+    };
+    // <=
+    (
+        {$($consumed:tt)*}
+        {<=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* <]
+            $finish
+        }
+    };
+    // <<
+    (
+        {$($consumed:tt)*}
+        {<<    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* < <] // split `<<` into two `<`
+            $finish
+        }
+    };
+    // <<=
+    (
+        {$($consumed:tt)*}
+        {<<=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* < <] // split `<<` into two `<`
+            $finish
+        }
+    };
+    // endregion
+
+    // region: `>` matched a previous `<` or `>>` matched previous `<<`
+    // `>` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {>     $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `->` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {->    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>=` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {>=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `=>` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {=>    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>>` matches two previous `<`
+    (
+        {$($consumed:tt)*}
+        {>>    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< < $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>>=` matches two previous `<`
+    (
+        {$($consumed:tt)*}
+        {>>=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< < $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // endregion
+
+    // anything else
+    (
+        {$($consumed:tt)*}
+        $_rest:tt
+        {$t:tt $($rest:tt)*}
+        $got_lt:tt
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            $got_lt
+            $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_split_gt_and_rest {
+    (
+        {>      $($_rest:tt)*}
+        {$gt:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                gt {$gt}
+                rest {$($rest)*}
+            }
+        }
+    };
+    (
+        {>= $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                gt {>}
+                rest { = $($rest)* } // >= is splitted into > and =
+            }
+        }
+    };
+    (
+        {>> $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                gt {>}
+                rest { > $($rest)* } // >> is splitted into > and >
+            }
+        }
+    };
+    (
+        {>>= $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                gt {>}
+                rest { >= $($rest)* } // >>= is splitted into > and >=
+            }
+        }
+    };
+}
+// endregion
+
+// region: consume_bounds
+
+/// Consume tokens till one of the following tokens:
+/// - `;`
+/// - an outer `,` (not wrapped in `< >`)
+/// - `where`
+/// - an outer `>` (not matching a previous `<`)
+/// - an outer `=` (not wrapped in `< >`)
+/// - an outer `{..}` (not wrapped in `< >`)
+/// - EOF
+#[macro_export]
+macro_rules! consume_bounds {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__impl_consume_bounds! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_bounds {
+    // ,
+    (
+        $parsed_bounds:tt
+        {, $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // ;
+    (
+        $parsed_bounds:tt
+        {; $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // where
+    (
+        $parsed_bounds:tt
+        {where $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer =
+    (
+        $parsed_bounds:tt
+        {= $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // {..}
+    (
+        $parsed_bounds:tt
+        {{$($_t:tt)*} $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // EOF
+    (
+        $parsed_bounds:tt
+        {} // EOF
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer >
+    (
+        $parsed_bounds:tt
+        {> $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer >=
+    (
+        $parsed_bounds:tt
+        {>= $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer >>
+    (
+        $parsed_bounds:tt
+        {>> $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer >>=
+    (
+        $parsed_bounds:tt
+        {>>= $($after:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds $parsed_bounds
+                rest $rest
+            }
+        }
+    };
+    // an outer ->
+    (
+        {$($parsed_bounds:tt)*}
+        {-> $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds {$($parsed_bounds)* -} // split -> into - and >
+                rest {> $($rest)*}
+            }
+        }
+    };
+    // an outer =>
+    (
+        {$($parsed_bounds:tt)*}
+        {=> $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed_bounds {$($parsed_bounds)* =} // split => into = and >
+                rest {> $($rest)*}
+            }
+        }
+    };
+    // `<` , consume till a matched `>`
+    (
+        {$($parsed_bounds:tt)*}
+        {<     $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish { $crate::__impl_consume_bounds_on_finish_consume_till_gt! }
+                append { finish $finish }
+            }
+        }
+    };
+    // `<=` , consume till a matched `>`
+    (
+        {$($parsed_bounds:tt)*}
+        {<=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish { $crate::__impl_consume_bounds_on_finish_consume_till_gt! }
+                append { finish $finish }
+            }
+        }
+    };
+    // `<-` , consume till a matched `>`
+    (
+        {$($parsed_bounds:tt)*}
+        {<-    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish { $crate::__impl_consume_bounds_on_finish_consume_till_gt! }
+                append { finish $finish }
+            }
+        }
+    };
+    // `<<` , consume till two matched `>` `>`
+    (
+        {$($parsed_bounds:tt)*}
+        {<<    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [<]
+            {
+                on_finish { $crate::__impl_consume_bounds_on_finish_consume_till_gt! }
+                append { finish $finish }
+            }
+        }
+    };
+    // `<<=` , consume till two matched `>` `>`
+    (
+        {$($parsed_bounds:tt)*}
+        {<<=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [<]
+            {
+                on_finish { $crate::__impl_consume_bounds_on_finish_consume_till_gt! }
+                append { finish $finish }
+            }
+        }
+    };
+    // other cases, just consume
+    (
+        {$($parsed_bounds:tt)*}
+        {$t:tt $($rest:tt)*}
+        $t_and_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_bounds! {
+            {$($parsed_bounds)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_bounds_on_finish_consume_till_gt {
+    (
+        before_gt $before_gt:tt
+        gt_and_rest $gt_and_rest:tt
+        finish $finish:tt
+    ) => {
+        // continue parse bounds
+        $crate::__impl_split_gt_and_rest! {
+            $gt_and_rest
+            $gt_and_rest
+            {
+                on_finish {$crate::__impl_consume_bounds_consume_first_gt_and_continue!}
+                prepend {
+                    finish $finish
+                    before_gt $before_gt
+                }
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_bounds_consume_first_gt_and_continue {
+    (
+        finish $finish:tt
+        before_gt { $($before_gt:tt)* }
+        gt {$gt:tt}
+        rest $rest:tt
+    ) => {
+        $crate::__impl_consume_bounds! {
+            {$($before_gt)* $gt}
+            $rest
+            $rest
+            $finish
+        }
+    };
+}
+
+// endregion
