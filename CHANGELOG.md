@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.2...syn-lite-v0.2.0) (2024-08-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* for consume_till_outer_gt!, consume_till_outer_gt_inclusive! and consume_bounds!, the `>` in `->` is now never considered as an outer `>`
+
+### Features
+
+* for consume_till_outer_gt!, consume_till_outer_gt_inclusive! and consume_bounds!, the `&gt;` in `->` is now never considered as an outer `>` ([e9296ad](https://github.com/frender-rs/syn-lite/commit/e9296ad7cec8f510cd7fab673792c080e74fcd1e))
+
 ## [0.1.2](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.1...syn-lite-v0.1.2) (2024-08-13)
 
 
