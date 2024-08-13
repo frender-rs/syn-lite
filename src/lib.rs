@@ -492,13 +492,16 @@ macro_rules! __resolve_finish {
 
 /// Consume tokens till an outer `>`.
 ///
+/// `>` is considered an outer `>` if there is not a previous `<` matching it.
+///
 /// Note that this macro might split the following tokens
 /// if the last `>` is an outer `>` which doesn't have a matched previous `>`:
-/// - `->`
 /// - `=>`
 /// - `>=`
 /// - `>>`
 /// - `>>=`
+///
+/// The `>` in `->` is not considered as a splitted `>`.
 #[macro_export]
 macro_rules! consume_till_outer_gt {
     ($($args:tt)*) => {
@@ -547,22 +550,6 @@ macro_rules! __impl_consume_till_outer_gt {
             output {
                 before_gt $consumed
                 gt_and_rest $rest
-            }
-        }
-    };
-    // ->
-    (
-        {$($consumed:tt)*}
-        {-> $($rest:tt)*}
-        $_rest:tt
-        [] // no inner `<` before this `>`
-        $finish:tt
-    ) => {
-        $crate::__resolve_finish! {
-            on_finish $finish
-            output {
-                before_gt { $($consumed)* - } // split
-                gt_and_rest { > $($rest)* } // split
             }
         }
     };
@@ -748,22 +735,6 @@ macro_rules! __impl_consume_till_outer_gt {
             $finish
         }
     };
-    // `->` matched a previous `<`
-    (
-        {$($consumed:tt)*}
-        {->    $($_rest:tt)*}
-        {$t:tt $($rest:tt )*}
-        [< $($got_lt:tt)*]
-        $finish:tt
-    ) => {
-        $crate::__impl_consume_till_outer_gt! {
-            {$($consumed)* $t}
-            {$($rest)*}
-            {$($rest)*}
-            [$($got_lt)*]
-            $finish
-        }
-    };
     // `>=` matched a previous `<`
     (
         {$($consumed:tt)*}
@@ -906,9 +877,11 @@ macro_rules! __impl_split_gt_and_rest {
 }
 // endregion
 
-// region: consume_till_outer_gt
+// region: consume_till_outer_gt_inclusive
 
 /// Consume tokens till an outer `>`, and consume this `>` as well.
+///
+/// See [consume_till_outer_gt!] for what is an outer `>`.
 #[macro_export]
 macro_rules! consume_till_outer_gt_inclusive {
     ($($args:tt)*) => {
@@ -957,22 +930,6 @@ macro_rules! __impl_consume_till_outer_gt_inclusive {
             output {
                 before_and_gt { $($consumed)* > } // >= is splitted
                 after_gt { = $($rest)* }
-            }
-        }
-    };
-    // ->
-    (
-        {$($consumed:tt)*}
-        {->     $($_rest:tt)*}
-        {$gt:tt $($rest:tt )*}
-        [] // no inner `<` before this `>`
-        $finish:tt
-    ) => {
-        $crate::__resolve_finish! {
-            on_finish $finish
-            output {
-                before_and_gt {$($consumed)* $gt}
-                after_gt {$($rest)*}
             }
         }
     };
@@ -1158,22 +1115,6 @@ macro_rules! __impl_consume_till_outer_gt_inclusive {
             $finish
         }
     };
-    // `->` matched a previous `<`
-    (
-        {$($consumed:tt)*}
-        {->    $($_rest:tt)*}
-        {$t:tt $($rest:tt )*}
-        [< $($got_lt:tt)*]
-        $finish:tt
-    ) => {
-        $crate::__impl_consume_till_outer_gt_inclusive! {
-            {$($consumed)* $t}
-            {$($rest)*}
-            {$($rest)*}
-            [$($got_lt)*]
-            $finish
-        }
-    };
     // `>=` matched a previous `<`
     (
         {$($consumed:tt)*}
@@ -1266,7 +1207,7 @@ macro_rules! __impl_consume_till_outer_gt_inclusive {
 /// - `;`
 /// - an outer `,` (not wrapped in `< >`)
 /// - `where`
-/// - an outer `>` (not matching a previous `<`)
+/// - an outer `>` (See [consume_till_outer_gt!] for what an outer `>` is.)
 /// - an outer `=` (not wrapped in `< >`)
 /// - an outer `{..}` (not wrapped in `< >`)
 /// - EOF
@@ -1432,21 +1373,6 @@ macro_rules! __impl_consume_bounds {
             output {
                 consumed_bounds $parsed_bounds
                 rest $rest
-            }
-        }
-    };
-    // an outer ->
-    (
-        {$($parsed_bounds:tt)*}
-        {-> $($rest:tt)*}
-        $_rest:tt
-        $finish:tt
-    ) => {
-        $crate::__resolve_finish! {
-            on_finish $finish
-            output {
-                consumed_bounds {$($parsed_bounds)* -} // split -> into - and >
-                rest {> $($rest)*}
             }
         }
     };
