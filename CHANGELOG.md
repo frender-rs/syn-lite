@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.0...syn-lite-v0.1.1) (2024-08-13)
+
+
+### Features
+
+* consume_till_outer_gt! and consume_bounds! ([d1dc835](https://github.com/frender-rs/syn-lite/commit/d1dc8359fc1536e8b7870797bf4eedb75afa5bc2))
+
 ## 0.1.0 (2023-03-18)
 
 
