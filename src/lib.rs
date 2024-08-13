@@ -906,6 +906,360 @@ macro_rules! __impl_split_gt_and_rest {
 }
 // endregion
 
+// region: consume_till_outer_gt
+
+/// Consume tokens till an outer `>`, and consume this `>` as well.
+#[macro_export]
+macro_rules! consume_till_outer_gt_inclusive {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__impl_consume_till_outer_gt_inclusive! }
+            args {
+                $($args)*
+            }
+            after_input {
+                [] // inner `<` list, start with an empty list
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_till_outer_gt_inclusive {
+    // region: unmatched > or >>
+    // >
+    (
+        {$($consumed:tt)*}
+        {>      $($_rest:tt)*}
+        {$gt:tt $($rest:tt )*}
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* $gt}
+                after_gt {$($rest)*}
+            }
+        }
+    };
+    // >=
+    (
+        {$($consumed:tt)*}
+        {>=     $($rest:tt)*}
+        $_rest:tt
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt { $($consumed)* > } // >= is splitted
+                after_gt { = $($rest)* }
+            }
+        }
+    };
+    // ->
+    (
+        {$($consumed:tt)*}
+        {->     $($_rest:tt)*}
+        {$gt:tt $($rest:tt )*}
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* $gt}
+                after_gt {$($rest)*}
+            }
+        }
+    };
+    // =>
+    (
+        {$($consumed:tt)*}
+        {=>     $($_rest:tt)*}
+        {$gt:tt $($rest:tt )*}
+        [] // no inner `<` before this `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* $gt}
+                after_gt {$($rest)*}
+            }
+        }
+    };
+    // >> only one matched
+    (
+        {$($consumed:tt)*}
+        {>>        $($_rest:tt)*}
+        {$gt_gt:tt $($rest:tt )*}
+        [<] // no inner `<` before the second `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* $gt_gt}
+                after_gt { $($rest)* }
+            }
+        }
+    };
+    // >> neither matched
+    (
+        {$($consumed:tt)*}
+        {>>    $($rest:tt)*}
+        $_rest:tt
+        [] // no inner `<` before the first `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* >} // >> is splitted
+                after_gt { > $($rest)*}
+            }
+        }
+    };
+    // >>= only one matched
+    (
+        {$($consumed:tt)*}
+        {>>= $($_rest:tt)*}
+        {>>= $($rest:tt )*}
+        [<] // no inner `<` before the second `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* >>}
+                after_gt { = $($rest)* } // >>= is splitted
+            }
+        }
+    };
+    // >>= neither matched
+    (
+        {$($consumed:tt)*}
+        {>>= $($rest:tt)*}
+        $_rest:tt
+        [] // no inner `<` before the first `>`
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                before_and_gt {$($consumed)* >}
+                after_gt { >= $($rest)* } // >>= is splitted
+            }
+        }
+    };
+    // endregion
+
+    // region: < and <<
+    // <
+    (
+        {$($consumed:tt)*}
+        {<     $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* $t]
+            $finish
+        }
+    };
+    // <-
+    (
+        {$($consumed:tt)*}
+        {<-    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* <]
+            $finish
+        }
+    };
+    // <=
+    (
+        {$($consumed:tt)*}
+        {<=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* <]
+            $finish
+        }
+    };
+    // <<
+    (
+        {$($consumed:tt)*}
+        {<<    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* < <] // split `<<` into two `<`
+            $finish
+        }
+    };
+    // <<=
+    (
+        {$($consumed:tt)*}
+        {<<=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [$($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)* < <] // split `<<` into two `<`
+            $finish
+        }
+    };
+    // endregion
+
+    // region: `>` matched a previous `<` or `>>` matched previous `<<`
+    // `>` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {>     $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `->` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {->    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>=` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {>=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `=>` matched a previous `<`
+    (
+        {$($consumed:tt)*}
+        {=>    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>>` matches two previous `<`
+    (
+        {$($consumed:tt)*}
+        {>>    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< < $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // `>>=` matches two previous `<`
+    (
+        {$($consumed:tt)*}
+        {>>=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        [< < $($got_lt:tt)*]
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            [$($got_lt)*]
+            $finish
+        }
+    };
+    // endregion
+
+    // anything else
+    (
+        {$($consumed:tt)*}
+        $_rest:tt
+        {$t:tt $($rest:tt)*}
+        $got_lt:tt
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
+            $got_lt
+            $finish
+        }
+    };
+}
+
+// endregion
+
 // region: consume_bounds
 
 /// Consume tokens till one of the following tokens:
@@ -1254,6 +1608,145 @@ macro_rules! __impl_consume_bounds_consume_first_gt_and_continue {
             $rest
             $rest
             $finish
+        }
+    };
+}
+
+// endregion
+
+// region: consume_optional_angle_bracketed
+
+#[macro_export]
+macro_rules! consume_optional_angle_bracketed {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__impl_consume_optional_angle_bracketed_start! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_optional_angle_bracketed_start {
+    (
+        {}
+        {<      $($_rest:tt)*}
+        {$lt:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$lt}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish {$crate::__impl_consume_optional_angle_bracketed_finish!}
+                prepend { on_finish $finish }
+            }
+        }
+    };
+    (
+        {}
+        {<-    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$t}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish {$crate::__impl_consume_optional_angle_bracketed_finish!}
+                prepend { on_finish $finish }
+            }
+        }
+    };
+    (
+        {}
+        {<=    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$t}
+            {$($rest)*}
+            {$($rest)*}
+            []
+            {
+                on_finish {$crate::__impl_consume_optional_angle_bracketed_finish!}
+                prepend { on_finish $finish }
+            }
+        }
+    };
+    (
+        {}
+        {<<    $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$t}
+            {$($rest)*}
+            {$($rest)*}
+            [<] // one inner <
+            {
+                on_finish {$crate::__impl_consume_optional_angle_bracketed_finish!}
+                prepend { on_finish $finish }
+            }
+        }
+    };
+    (
+        {}
+        {<<=   $($_rest:tt)*}
+        {$t:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_till_outer_gt_inclusive! {
+            {$t}
+            {$($rest)*}
+            {$($rest)*}
+            [<] // one inner <
+            {
+                on_finish {$crate::__impl_consume_optional_angle_bracketed_finish!}
+                prepend { on_finish $finish }
+            }
+        }
+    };
+    // no leading <
+    (
+        {}
+        $rest:tt
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                // angle_bracketed $before_and_gt
+                rest $rest
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_consume_optional_angle_bracketed_finish {
+    (
+        on_finish $finish:tt
+        before_and_gt $before_and_gt:tt
+        after_gt $after_gt:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                angle_bracketed $before_and_gt
+                rest $after_gt
+            }
         }
     };
 }
