@@ -211,6 +211,56 @@ macro_rules! __start_parsing_with {
     };
 }
 
+// this doesn't change the order of tokens
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __start_parsing_with_v2 {
+    (
+        parse_with {$($parse_with:tt)*}
+        $(before_input { $($before_input:tt)* })?
+        args {
+            on_finish $on_finish:tt
+            $(prepend $output_prepend:tt)?
+            input $input:tt
+            $(append $output_append:tt)?
+        }
+        $(after_input { $($after_input:tt)* })?
+    ) => {
+        $($parse_with)* {
+            {
+                on_finish $on_finish
+                $(prepend $output_prepend)?
+            }
+            $($($before_input)*)?
+            $input
+            $input // clone input
+            $($($after_input)*)?
+            {
+                $(append $output_append)?
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __resolve_finish_v2 {
+    (
+        {
+            on_finish { $($macro_and_bang:tt)* }
+            $(prepend { $($output_prepend:tt)* })?
+        }
+        { $($output:tt)* }
+        { $(append  { $($output_append:tt )* })? }
+    ) => {
+        $($macro_and_bang)* {
+            $($($output_prepend)*)?
+            $($output)*
+            $($($output_append)*)?
+        }
+    };
+}
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __resolve_finish {
@@ -3096,6 +3146,10 @@ macro_rules! __parse_item_fn_signature_process_consumed_where_predicates {
     };
 }
 
+// endregion
+
+// region: consume_where_clause
+
 /// consume till one of the following tokens:
 /// - EOF
 /// - `;`
@@ -3160,6 +3214,74 @@ macro_rules! __consume_where_predicates {
             {$($consumed)* $t}
             {$($rest)*}
             {$($rest)*}
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! consume_optional_where_clause {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with_v2! {
+            parse_with { $crate::__consume_optional_where_clause! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __consume_optional_where_clause {
+    (
+        $on_finish_and_prepend:tt
+        {where     $($_rest:tt)*}
+        {$where:tt $( $rest:tt)*}
+        $on_finish_append:tt
+    ) => {
+        $crate::__consume_where_predicates! {
+            {
+                on_finish {$crate::__consume_optional_where_clause_after_consume_where_predicates!}
+                prepend { $on_finish_and_prepend }
+                append { $on_finish_append }
+            }
+            {$where}
+            {$($rest)*}
+            {$($rest)*}
+        }
+    };
+    (
+        $on_finish_and_prepend:tt
+        $_rest:tt
+        $rest:tt
+        $on_finish_append:tt
+    ) => {
+        $crate::__resolve_finish_v2! {
+            $on_finish_and_prepend
+            {
+                rest $rest
+            }
+            $on_finish_append
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __consume_optional_where_clause_after_consume_where_predicates {
+    (
+        $on_finish_and_prepend:tt
+        consumed $where_clause:tt
+        rest $rest:tt
+        $on_finish_append:tt
+    ) => {
+        $crate::__resolve_finish_v2! {
+            $on_finish_and_prepend
+            {
+                where_clause $where_clause
+                rest $rest
+            }
+            $on_finish_append
         }
     };
 }
