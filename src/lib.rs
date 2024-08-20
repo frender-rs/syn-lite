@@ -3150,3 +3150,71 @@ macro_rules! __consume_optional_where_clause_after_consume_where_predicates {
 }
 
 // endregion
+
+// region: consume_inner_attrs
+
+#[macro_export]
+macro_rules! consume_inner_attrs {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with_v2! {
+            parse_with { $crate::__consume_inner_attrs! }
+            before_input {{}} // consumed
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __consume_inner_attrs {
+    (
+        $on_finish_and_prepend:tt
+        {$($parsed:tt)*}
+        {#         !        [$($_attr1:tt)*] #         !        [$($_attr2:tt)*] $($_rest:tt)*}
+        {$pound1:tt $bang1:tt $attr1:tt      $pound2:tt $bang2:tt $attr2:tt      $( $rest:tt)*}
+        $on_finish_append:tt
+    ) => {
+        $crate::__consume_inner_attrs! {
+            $on_finish_and_prepend
+            {$($parsed)* $pound1 $bang1 $attr1 $pound2 $bang2 $attr2 }
+            {$($rest)*}
+            {$($rest)*}
+            $on_finish_append
+        }
+    };
+    (
+        $on_finish_and_prepend:tt
+        {$($parsed:tt)*}
+        {#         !        [$($_attr:tt)*] $($_rest:tt)*}
+        {$pound:tt $bang:tt $attr:tt        $( $rest:tt)*}
+        $on_finish_append:tt
+    ) => {
+        $crate::__consume_inner_attrs! {
+            $on_finish_and_prepend
+            {$($parsed)* $pound $bang $attr}
+            {$($rest)*}
+            {$($rest)*}
+            $on_finish_append
+        }
+    };
+    (
+        $on_finish_and_prepend:tt
+        $consumed:tt
+        $_rest:tt
+        $rest:tt
+        $on_finish_append:tt
+    ) => {
+        $crate::__resolve_finish_v2! {
+            $on_finish_and_prepend
+            {
+                inner_attrs $consumed
+                rest $rest
+            }
+            $on_finish_append
+        }
+    };
+}
+
+// endregion
