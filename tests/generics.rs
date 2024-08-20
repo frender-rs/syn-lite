@@ -1,208 +1,320 @@
 use syn_lite::parse_generics;
 
+pub mod asserts {
+    macro_rules! lifetimes {
+        ($($lt:lifetime $(+ $lts:lifetime)* $(+)? )?) => {};
+    }
+
+    lifetimes! {}
+    lifetimes! {'a}
+    lifetimes! {'a + 'b}
+    lifetimes! {'a + 'b +}
+    lifetimes! {'a + 'b + 'c}
+    lifetimes! {'a + 'b + 'c +}
+
+    macro_rules! many_plus_and_path {
+        ( $(+ $lts:path)* ) => {};
+    }
+
+    many_plus_and_path! {+ Sized}
+    many_plus_and_path! {+ mod_path::Sized}
+    many_plus_and_path! {+ mod_path::Sized + __}
+    many_plus_and_path! {+ Trait::<_>}
+    many_plus_and_path! {+ Trait<_>}
+    many_plus_and_path! {+ Trait<_>}
+
+    macro_rules! match_many_generics_info {
+        (
+            $({
+                attrs {$($lifetime_attr:tt)*}
+                lifetime {}
+            })*
+            $({
+                attrs {$($name_attr:tt)*}
+                name {}
+            })*
+        ) => {};
+    }
+
+    /*
+    // this would leads to local ambiguity
+    macro_rules! match_many_generics_info {
+        (
+            $({
+                attrs $attr:tt
+                lifetime {}
+            })*
+            $({
+                attrs $type_attr:tt
+                name {}
+            })*
+        ) => {};
+    }
+    */
+
+    match_many_generics_info! {
+        {attrs {} lifetime {}}
+        {attrs {} name {}}
+    }
+
+    /*
+    // this would leads to local ambiguity
+    match_many_generics_info! {
+        {attrs {#[__]} lifetime {}}
+        {attrs {} name {}}
+    }
+    */
+
+    macro_rules! expect_expr {
+        ($e:expr) => {};
+    }
+    macro_rules! rematch_path_as_expr {
+        ($p:path) => {
+            expect_expr! {$p}
+        };
+    }
+
+    rematch_path_as_expr! {a}
+    rematch_path_as_expr! {a::a}
+    rematch_path_as_expr! {A<A>::A}
+}
+
 macro_rules! assert_no_generics {
     (
-        generics! {
-            params! {}
-            impl_generics! {}
-            type_generics! {}
-            params_name! {}
+        parsed_generics {
+            generics {}
+            impl_generics {}
+            type_generics {}
+            generics_info {}
         }
-        rest! {}
+        rest {}
     ) => {};
 }
 
 parse_generics! {
-    {} => assert_no_generics!
-}
-parse_generics! {
-    {<>} => assert_no_generics!
+    on_finish {assert_no_generics!}
+    input {}
 }
 
-// FIXME: this should not be allowed
-macro_rules! assert_comma {
+macro_rules! assert_no_generics_with_rest {
     (
-        generics! {
-            params! { , }
-            impl_generics! { , }
-            type_generics! { , }
-            params_name! { , }
+        parsed_generics {
+            generics {}
+            impl_generics {}
+            type_generics {}
+            generics_info {}
         }
-        rest! {}
+        rest {> for _ {}}
     ) => {};
 }
 
 parse_generics! {
-    {<,>} => assert_comma!
+    on_finish {assert_no_generics_with_rest!}
+    input {> for _ {}}
+}
+
+macro_rules! assert_no_generics_with_gt {
+    (
+        parsed_generics {
+            generics {}
+            impl_generics {}
+            type_generics {}
+            generics_info {}
+        }
+        rest {>}
+    ) => {};
+}
+
+parse_generics! {
+    on_finish {assert_no_generics_with_gt!}
+    input {>}
 }
 
 macro_rules! assert_lifetime {
     (
-        generics! {
-            params! { 'a }
-            impl_generics! { 'a }
-            type_generics! { 'a }
-            params_name! { 'a }
+        parsed_generics {
+            generics { 'a , }
+            impl_generics { 'a , }
+            type_generics { 'a , }
+            generics_info { { lifetime {'a} } }
         }
-        rest! {}
+        rest {>}
     ) => {};
 }
 
 parse_generics! {
-    {<'a>} => assert_lifetime!
-}
-
-macro_rules! assert_lifetime_comma {
-    (
-        generics! {
-            params! { 'a, }
-            impl_generics! { 'a, }
-            type_generics! { 'a, }
-            params_name! { 'a, }
-        }
-        rest! {}
-    ) => {};
+    on_finish {assert_lifetime!}
+    input {'a>}
 }
 
 parse_generics! {
-    {<'a,>} => assert_lifetime_comma!
+    on_finish {assert_lifetime!}
+    input {'a,>}
 }
 
 macro_rules! assert_lifetimes {
     (
-        generics! {
-            params! { 'a, 'b: 'a }
-            impl_generics! { 'a, 'b: 'a }
-            type_generics! { 'a, 'b }
-            params_name! { 'a, 'b }
+        parsed_generics {
+            generics { 'a, 'b: 'a, }
+            impl_generics { 'a, 'b: 'a, }
+            type_generics { 'a, 'b, }
+            generics_info {
+                {lifetime {'a}}
+                {lifetime {'b} bounds {'a}}
+            }
         }
-        rest! {}
+        rest {>}
     ) => {};
 }
 
 parse_generics! {
-    {<'a, 'b: 'a>} => assert_lifetimes!
-}
-
-macro_rules! assert_lifetimes_comma {
-    (
-        generics! {
-            params! { 'a, 'b: 'a, }
-            impl_generics! { 'a, 'b: 'a, }
-            type_generics! { 'a, 'b, }
-            params_name! { 'a, 'b, }
-        }
-        rest! {}
-    ) => {};
+    on_finish {assert_lifetimes!}
+    input {'a, 'b: 'a>}
 }
 
 parse_generics! {
-    {<'a, 'b: 'a,>} => assert_lifetimes_comma!
+    on_finish {assert_lifetimes!}
+    input {'a, 'b: 'a,>}
 }
 
 macro_rules! assert_tp {
     (
-        generics! {
-            params! { T }
-            impl_generics! { T }
-            type_generics! { $crate::expand_or![[] T] }
-            params_name! { T }
+        parsed_generics {
+            generics { T, }
+            impl_generics { T, }
+            type_generics { T, }
+            generics_info {
+                { name {T} }
+            }
         }
-        rest! {}
+        rest {}
     ) => {};
 }
 
 parse_generics! {
-    {<T>} => assert_tp!
-}
-
-macro_rules! assert_tp_comma {
-    (
-        generics! {
-            params! { T, }
-            impl_generics! { T, }
-            type_generics! { $crate::expand_or![[] T], }
-            params_name! { T, }
-        }
-        rest! {}
-    ) => {};
+    on_finish{assert_tp!}
+    input{T}
 }
 
 parse_generics! {
-    {<T,>} => assert_tp_comma!
+    on_finish{assert_tp!}
+    input{T,}
 }
 
 #[test]
 fn full() {
-    let r_paths;
-    let sized;
-    let s_paths;
     let s_default_ty;
-    let n_path;
-    let m_path;
-    let m_default_lit;
-
+    let n_ty;
+    let n_ty_1;
+    let m_ty;
+    let m_ty_1;
+    let m_default_expr;
+    let s_default_ty_2;
+    let n_ty_2;
+    let m_ty_2;
+    let m_default_expr_2;
     macro_rules! assert_full {
         (
-            generics! {
-                params! {
+            parsed_generics {
+                generics {
                     'a,
                     'b: 'a,
-                    R: 'a +'b $(+ $r_paths:path)+,
-                    S: 'b + ?$sized:tt $(+ $s_paths:path)+ = $s_default_ty:ty,
+                    #[doc = r" hello"]
+                    'c:,
+                    R: 'a +'b + Default + FnOnce() -> T,
+                    S: 'b + ?Sized + Default + AsRef<T> = $s_default_ty:ty,
                     T,
-                    const N: $n_path:path,
-                    const M: $m_path:path = $m_default_lit:literal,
+                    #[doc = "world"]
+                    U,
+                    const N: $n_ty:ty,
+                    #[cfg(..)]
+                    const M: $m_ty:ty = $m_default_expr:expr,
                 }
-                impl_generics! {
+                impl_generics {
                     'a,
                     'b: 'a,
-                    R: 'a +'b $(+ $r_paths2:path)+,
-                    S: 'b + ?$sized2:tt $(+ $s_paths2:path)+,
+                    #[doc = r" hello"]
+                    'c:,
+                    R: 'a +'b + Default + FnOnce() -> T,
+                    S: 'b + ?Sized + Default + AsRef<T>,
                     T,
-                    const N: $n_path2:path,
-                    const M: $m_path2:path,
+                    #[doc = "world"]
+                    U,
+                    const N: $n_ty_1:ty,
+                    #[cfg(..)]
+                    const M: $m_ty_1:ty,
                 }
-                type_generics! {
+                type_generics {
                     'a,
                     'b,
-                    $crate::expand_or![[] R],
-                    $crate::expand_or![[] S],
-                    $crate::expand_or![[] T],
-                    $crate::expand_or![[N] const],
-                    $crate::expand_or![[M] const],
+                    #[doc = r" hello"]
+                    'c,
+                    R,
+                    S,
+                    T,
+                    #[doc = "world"]
+                    U,
+                    N,
+                    #[cfg(..)]
+                    M,
                 }
-                params_name! { 'a, 'b, R, S, T, const N, const M, }
+                generics_info {
+                    { lifetime {'a} }
+                    { lifetime {'b} bounds {'a} }
+                    { lifetime_attrs {#[doc = r" hello"]} lifetime {'c} bounds {} }
+                    { name {R} bounds {'a +'b + Default + FnOnce() -> T} }
+                    { name {S} bounds {'b + ?Sized + Default + AsRef<T>} default_ty {$s_default_ty_2:ty} }
+                    { name {T} }
+                    { type_attrs {#[doc = "world"]} name {U} }
+                    { const {const} name {N} bounds {$n_ty_2:ty} }
+                    { const_attrs {#[cfg(..)]} const {const} name {M} bounds {$m_ty_2:ty} default_expr {$m_default_expr_2:expr} }
+                }
             }
-            rest! {}
+            rest {}
         ) => {
-            r_paths = stringify!($([$r_paths])+);
-            sized = stringify!($sized);
-            s_paths = stringify!($([$s_paths])+);
             s_default_ty = stringify!($s_default_ty);
-            n_path = <$n_path>::MAX;
-            m_path = <$m_path>::MAX;
-            m_default_lit = $m_default_lit;
+            n_ty = stringify!($n_ty);
+            m_ty = stringify!($m_ty);
+            m_default_expr = stringify!($m_default_expr);
+
+            n_ty_1 = stringify!($n_ty_1);
+            m_ty_1 = stringify!($m_ty_1);
+
+            s_default_ty_2 = stringify!($s_default_ty_2);
+            n_ty_2 = stringify!($n_ty_2);
+            m_ty_2 = stringify!($m_ty_2);
+            m_default_expr_2 = stringify!($m_default_expr_2);
         };
     }
 
     parse_generics! {
-        {<
+        on_finish {assert_full!}
+        input {
             'a,
             'b: 'a,
+            /// hello
+            'c:,
             R: 'a +'b + Default + FnOnce() -> T,
             S: 'b + ?Sized + Default + AsRef<T> = &'b T,
             T,
+            #[doc = "world"]
+            U,
             const N: usize,
+            #[cfg(..)]
             const M: u8 = 1,
-        >} => assert_full!
+        }
     }
 
-    assert_eq!(r_paths, "[Default] [FnOnce() -> T]");
-    assert_eq!(sized, "Sized");
-    assert_eq!(s_paths, "[Default] [AsRef<T>]");
     assert_eq!(s_default_ty, "&'b T");
-    assert_eq!(n_path, usize::MAX);
-    assert_eq!(m_path, u8::MAX);
-    assert_eq!(m_default_lit, 1);
+    assert_eq!(n_ty, "usize");
+    assert_eq!(m_ty, "u8");
+    assert_eq!(m_default_expr, "1");
+
+    assert_eq!(n_ty_1, "usize");
+    assert_eq!(m_ty_1, "u8");
+
+    assert_eq!(s_default_ty_2, "&'b T");
+    assert_eq!(n_ty_2, "usize");
+    assert_eq!(m_ty_2, "u8");
+    assert_eq!(m_default_expr_2, "1");
 }

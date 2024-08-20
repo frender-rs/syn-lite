@@ -45,122 +45,6 @@ macro_rules! parse_inner_attrs {
     };
 }
 
-/// Generics inside `<...>` but without `<` `>` and without `where` clause.
-#[macro_export]
-macro_rules! parse_generics {
-    (
-        $([ $($before:tt)* ])?
-        {
-            <>
-            $($rest:tt)*
-        }
-        $([ $($after:tt)* ])?
-        => $($out_macro_and_bang:tt)+
-    ) => {
-        $($out_macro_and_bang)+ {
-            $( $($before)* )?
-            generics! {
-                params! {}
-                impl_generics! {}
-                type_generics! {}
-                params_name! {}
-            }
-            rest! { $($rest)* }
-            $( $($after)* )?
-        }
-    };
-    (
-        $([ $($before:tt)* ])?
-        {
-            <$(
-                $($lt:lifetime)?
-                $($tp1:ident $($tp2:ident)?)?
-                $(
-                    :
-                    $($bound_lt:lifetime)?
-                    $(+ $bounds_lt:lifetime)*
-                    $(
-                        $( + $({$plus_ignore:tt })? )?
-                        $( ? $([$relax_ignore:tt])? )?
-                        $bounds:path
-                    )*
-                )?
-                $(
-                    =
-                    $($default_lit:literal)?
-                    $({ $($default_const_block:tt)* })?
-                    $($default_ty:ty)?
-                )?
-            ),+ >
-            $($rest:tt)*
-        }
-        $([ $($after:tt)* ])?
-        => $($out_macro_and_bang:tt)+
-    ) => {
-        $($out_macro_and_bang)+ {
-            $( $($before)* )?
-            generics! {
-                params! {$(
-                    $($lt)?
-                    $($tp1 $($tp2)?)?
-                    $(
-                        :
-                        $($bound_lt)?
-                        $(+ $bounds_lt)*
-                        $(
-                            $( + $({$plus_ignore })? )?
-                            $( ? $([$relax_ignore])? )?
-                            $bounds
-                        )*
-                    )?
-                    $(
-                        =
-                        $($default_lit)?
-                        $({ $($default_const_block)* })?
-                        $($default_ty)?
-                    )?
-                ),+}
-                impl_generics! {$(
-                    $($lt)?
-                    $($tp1 $($tp2)?)?
-                    $(
-                        :
-                        $($bound_lt)?
-                        $(+ $bounds_lt)*
-                        $(
-                            $( + $({$plus_ignore })? )?
-                            $( ? $([$relax_ignore])? )?
-                            $bounds
-                        )*
-                    )?
-                ),+}
-                type_generics! { $( $($lt)? $($crate::expand_or![[$($tp2)?] $tp1 ])? ),+ }
-                params_name! { $( $($lt)? $($tp1 $($tp2)?)? ),+ }
-            }
-            rest! { $($rest)* }
-            $( $($after)* )?
-        }
-    };
-    (
-        $([ $($before:tt)* ])?
-        { $($rest:tt)* }
-        $([ $($after:tt)* ])?
-        => $($out_macro_and_bang:tt)+
-    ) => {
-        $($out_macro_and_bang)+ {
-            $( $($before)* )?
-            generics! {
-                params! {}
-                impl_generics! {}
-                type_generics! {}
-                params_name! {}
-            }
-            rest! { $($rest)* }
-            $( $($after)* )?
-        }
-    };
-}
-
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __impl_parse_where_clause_finish {
@@ -298,148 +182,8 @@ macro_rules! parse_where_clause {
     };
 }
 
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __impl_parse_item_fn_finish {
-    (
-        [
-            [
-                output_macro_and_bang! { $($out_macro_and_bang:tt)+ }
-                before! { $($before:tt)* }
-                after! { $($after:tt)* }
-                outer_attrs! $outer_attrs:tt
-                vis! $vis:tt
-                ident! $ident:tt
-            ]
-            generics! $generics:tt
-            paren_inputs! $paren_inputs:tt
-            output! $output:tt
-        ]
-        where_clause! $where_clause:tt
-        rest! $rest:tt // rest tokens after ItemFn
-        inner_attrs! $inner_attrs:tt
-        rest! $stmts:tt // rest tokens after inner_attrs, that are stmts
-    ) => {
-        $($out_macro_and_bang)+ {
-            $($before)*
-            item_fn! {
-                outer_attrs! $outer_attrs
-                vis! $vis
-                sig! {
-                    ident! $ident
-                    generics! $generics
-                    paren_inputs! $paren_inputs
-                    output! $output
-                    where_clause! $where_clause
-                }
-                inner_attrs! $inner_attrs
-                stmts! $stmts
-            }
-            rest! $rest
-            $($after)*
-        }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __impl_parse_item_fn_where_clause_parsed {
-    (
-        $other:tt
-        where_clause! $where_clause:tt
-        rest! {
-            $fn_body:tt
-            $($rest:tt)*
-        }
-    ) => {
-        $crate::parse_inner_attrs! {
-            [$other where_clause! $where_clause rest! { $($rest)* }]
-            $fn_body
-            => $crate::__impl_parse_item_fn_finish!
-        }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __impl_parse_item_fn_generics_parsed {
-    (
-        $other:tt
-        generics! $generics:tt
-        rest! {
-            $paren_inputs:tt
-            $( -> $output_ty:ty )?
-            where
-            $($rest:tt)*
-        }
-    ) => {
-        $crate::parse_where_clause! {
-            [[
-                $other
-                generics! $generics
-                paren_inputs! { $paren_inputs }
-                output! { $( -> $output_ty )? }
-            ]]
-            { where $($rest)* }
-            => $crate::__impl_parse_item_fn_where_clause_parsed!
-        }
-    };
-    (
-        $other:tt
-        generics! $generics:tt
-        rest! {
-            $paren_inputs:tt
-            $( -> $output_ty:ty )?
-            { $($fn_body:tt)* }
-            $($rest:tt)*
-        }
-    ) => {
-        $crate::parse_inner_attrs! {
-            [
-                [
-                    $other
-                    generics! $generics
-                    paren_inputs! { $paren_inputs }
-                    output! { $( -> $output_ty )? }
-                ]
-                where_clause! {}
-                rest! { $($rest)* } // after ItemFn
-            ]
-            { $($fn_body)* }
-            => $crate::__impl_parse_item_fn_finish!
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! parse_item_fn {
-    (
-        $([ $($before:tt)* ])?
-        {
-            $(#$outer_attrs:tt)*
-            $vis:vis fn $name:ident
-            $($rest:tt)*
-        }
-        $([ $($after:tt)* ])?
-        => $($out_macro_and_bang:tt)+
-    ) => {
-        $crate::parse_generics! {
-            [[
-                output_macro_and_bang! { $($out_macro_and_bang)+ }
-                before! { $($($before)*)? }
-                after! { $($($after)*)? }
-                outer_attrs! { $(#$outer_attrs)* }
-                vis! { $vis }
-                ident! { $name }
-            ]]
-            { $($rest)* }
-            []
-            => $crate::__impl_parse_item_fn_generics_parsed!
-        }
-    };
-}
-
 // region: common utils
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __start_parsing_with {
@@ -482,6 +226,20 @@ macro_rules! __resolve_finish {
             $($($output_prepend)*)?
             $($output)*
             $($($output_append)*)?
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __resolve_finish_flat {
+    (
+        $finish:tt
+        $($output:tt)*
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output { $($output)* }
         }
     };
 }
@@ -1673,6 +1431,1735 @@ macro_rules! __impl_consume_optional_angle_bracketed_finish {
                 angle_bracketed $before_and_gt
                 rest $after_gt
             }
+        }
+    };
+}
+
+// endregion
+
+// region: parse_generics
+
+/// Parse generics
+///
+/// Input should be zero or many generics separated by `,` with an optional trailing `,` and
+/// end with `EOF` or `>`.
+///
+/// ```
+/// macro_rules! expect_output {
+///     (
+///         parsed_generics {
+///             generics {$($generics:tt)*} // the original generics with a trailing comma
+///             impl_generics {$($impl_generics:tt)*} // generics with a trailing comma but without default types and default exprs
+///             type_generics {$($type_generics:tt)*} // generics with a trailing comma that can be used as type parameters of a generic path
+///             generics_info {$($generics_info:tt)*} // info of all generics
+///         }
+///         rest { > }
+///     ) => {
+///         // ..
+///     };
+/// }
+///
+/// syn_lite::parse_generics! {
+///     on_finish { expect_output! }
+///     input { 'a, 'b: 'c, T: ?Sized + FnOnce(), > }
+/// }
+/// ```
+///
+/// Here is a full example:
+///
+/// ```
+/// # let res = syn_lite::parse_generics! { on_finish { full_output! }
+/// input {
+///     /// lifetime
+///     'a: 'b + 'c,
+///     /// type param
+///     T: FnOnce() -> u8 + 'static + ?Sized = dyn FnOnce() -> u8,
+///     /// const
+///     const N: &'static str = "default expr"
+/// }
+/// # };
+/// # assert_eq!(res, ("dyn FnOnce() -> u8", "&'static str", "default expr"));
+/// /// output
+/// # #[macro_export] macro_rules! full_output {(
+/// parsed_generics {
+///     // the original generics with a trailing comma
+///     generics      { #[doc = r" lifetime"] 'a: 'b + 'c, #[doc = r" type param"] T: FnOnce() -> u8 + 'static + ?Sized = $DefaultType:ty, #[doc = r" const"] const N: $ConstType:ty = $const_default_expr:expr, }
+///     // generics with a trailing comma but without default types and default exprs
+///     impl_generics { #[doc = r" lifetime"] 'a: 'b + 'c, #[doc = r" type param"] T: FnOnce() -> u8 + 'static + ?Sized                  , #[doc = r" const"] const N: $ConstTyp_:ty                           , }
+///     // generics with a trailing comma that can be used as type parameters of a generic path
+///     type_generics { #[doc = r" lifetime"] 'a         , #[doc = r" type param"] T                                                     , #[doc = r" const"]       N                                          , }
+///     // info of all generics
+///     generics_info {
+///         {
+///             lifetime_attrs {#[doc = r" lifetime"]} // present if there are attributes
+///             lifetime { 'a }
+///             bounds { 'b + 'c } // present if there is a colon. This might be empty
+///         }
+///         {
+///             type_attrs {#[doc = r" type param"]} // present if there are attributes
+///             name { T }
+///             bounds { FnOnce() -> u8 + 'static + ?Sized } // present if there is a colon. This might be empty
+///             default_ty { $DefaultTypeOfT:ty } // present if there is a `= $default_ty:ty`
+///         }
+///         {
+///             const_attrs {#[doc = r" const"]} // present if there are attributes
+///             const { const }
+///             name { N }
+///             bounds { $TypeOfN:ty }
+///             default_expr { $DefaultExprOfN:expr } // present if there is a `= $default_expr:expr`
+///         }
+///     }
+/// }
+/// rest {}
+/// # )=>{{
+/// # assert_eq!(stringify!($ConstType), stringify!($ConstTyp_));
+/// # assert_eq!(stringify!($DefaultType), stringify!($DefaultTypeOfT));
+/// # assert_eq!(stringify!($DefaultExprOfN), stringify!($DefaultExprOfN));
+/// # (stringify!($DefaultType), stringify!($ConstType), $const_default_expr)
+/// # }}}
+/// ```
+#[macro_export]
+macro_rules! parse_generics {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__parse_generics_start! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_start {
+    (
+        {}
+        $($rest:tt)*
+    ) => {
+        $crate::__parse_generics! {
+            {
+                generics {}
+                impl_generics {}
+                type_generics {}
+                generics_info {}
+            }
+            $($rest)*
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics {
+    // EOF
+    (
+        $parsed_generics:tt
+        {}
+        {}
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest {}
+            }
+        }
+    };
+    // >
+    (
+        $parsed_generics:tt
+        { >      $($_rest:tt)* }
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest $rest
+            }
+        }
+    };
+    // >>
+    (
+        $parsed_generics:tt
+        { >>    $($_rest:tt)* }
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest $rest
+            }
+        }
+    };
+    // >=
+    (
+        $parsed_generics:tt
+        { >=    $($_rest:tt)* }
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest $rest
+            }
+        }
+    };
+    // >>=
+    (
+        $parsed_generics:tt
+        { >>=    $($_rest:tt)* }
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest $rest
+            }
+        }
+    };
+    // 'a:
+    (
+        $parsed:tt
+        { $(#[$($_attr:tt)*])* $_lt:lifetime :         $($_bounds_and_rest:tt)* }
+        { $(#$attr:tt       )* $lt:lifetime  $colon:tt $($bounds_and_rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_bounds! {
+            {}
+            {$($bounds_and_rest)*}
+            {$($bounds_and_rest)*}
+            {
+                on_finish { $crate::__parse_generics_lifetime_process_consumed_bounds! }
+                prepend {
+                    parsed_generics $parsed
+                    generic_and_colon {
+                        attrs { $(#$attr)* }
+                        $lt $colon
+                    }
+                }
+                append {
+                    finish $finish
+                }
+            }
+        }
+    };
+    // 'a
+    (
+        {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        { $($(#[$($_attr:tt)*])+)? $_lt:lifetime $($_rest:tt)* }
+        { $($(#$attr:tt       )+)? $lt:lifetime  $($rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_match_one_of_comma_gt_eof! {
+            // trailing comma is added later
+            {
+                generics      { $($generics)*      $($(#$attr)+)? $lt }
+                impl_generics { $($impl_generics)* $($(#$attr)+)? $lt }
+                type_generics { $($type_generics)* $($(#$attr)+)? $lt }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $( lifetime_attrs {$(#$attr)+} )?
+                        lifetime {$lt}
+                    }
+                }
+            }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    // `const N: usize =`
+    (
+        $parsed_generics:tt
+        { $(#[$($_attr:tt)*])* const        $_name:ident :         $_bounds:ty = $($_default_expr_and_rest:tt)* }
+        { $(#$attr:tt       )* $const:ident $name:ident  $colon:tt $bounds:ty  = $($default_expr_and_rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_match_default_expr! {
+            {
+                parsed_generics $parsed_generics
+                generic {
+                    attrs {$(#$attr)*}
+                    $const $name
+                }
+                colon {$colon}
+                ty {$bounds}
+                eq {=}
+            }
+            {$($default_expr_and_rest)*}
+            {$($default_expr_and_rest)*}
+            $finish
+        }
+    };
+    // `const N: usize,` or `const N: usize EOF`
+    (
+        {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        { $($(#[$($_attr:tt)*])+)? const        $_name:ident :         $_bounds:ty $(, $($_rest:tt)*)? }
+        { $($(#$attr:tt       )+)? $const:ident $name:ident  $colon:tt $bounds:ty  $(, $($rest:tt )*)? }
+        $finish:tt
+    ) => {
+        $crate::__parse_generics! {
+            {
+                generics      { $($generics)*      $($(#$attr)+)? $const $name $colon $bounds , }
+                impl_generics { $($impl_generics)* $($(#$attr)+)? $const $name $colon $bounds , }
+                type_generics { $($type_generics)* $($(#$attr)+)?        $name                , }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(const_attrs {$(#$attr)+})?
+                        const {$const}
+                        name {$name}
+                        bounds {$bounds}
+                    }
+                }
+            }
+            {$($($rest)*)?}
+            {$($($rest)*)?}
+            $finish
+        }
+    };
+    // `const N: usize >`
+    (
+        {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        { $($(#[$($_attr:tt)*])+)? const        $_name:ident :         $_bounds:ty > $($_rest:tt)* }
+        { $($(#$attr:tt       )+)? $const:ident $name:ident  $colon:tt $bounds:ty  > $($rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($(#$attr)+)? $const $name $colon $bounds , }
+                    impl_generics { $($impl_generics)* $($(#$attr)+)? $const $name $colon $bounds , }
+                    type_generics { $($type_generics)* $($(#$attr)+)?        $name                  }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(const_attrs {$(#$attr)+})?
+                            const {$const}
+                            name {$name}
+                            bounds {$bounds}
+                        }
+                    }
+                }
+                rest { > $($rest)* }
+            }
+        }
+    };
+    // `const N: usize >>`
+    (
+        {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        { $($(#[$($_attr:tt)*])+)? const        $_name:ident :         $_bounds:ty >> $($_rest:tt)* }
+        { $($(#$attr:tt       )+)? $const:ident $name:ident  $colon:tt $bounds:ty  >> $($rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($(#$attr)+)? $const $name $colon $bounds , }
+                    impl_generics { $($impl_generics)* $($(#$attr)+)? $const $name $colon $bounds , }
+                    type_generics { $($type_generics)* $($(#$attr)+)?        $name                  }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(const_attrs {$(#$attr)+})?
+                            const {$const}
+                            name {$name}
+                            bounds {$bounds}
+                        }
+                    }
+                }
+                rest { >> $($rest)* }
+            }
+        }
+    };
+    // T:
+    (
+        $parsed:tt
+        { $(#[$($_attr:tt)*])* $_name:ident :         $($_bounds_and_rest:tt)* }
+        { $(#$attr:tt       )* $name:ident  $colon:tt $($bounds_and_rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__impl_consume_bounds! {
+            {}
+            {$($bounds_and_rest)*}
+            {$($bounds_and_rest)*}
+            {
+                on_finish { $crate::__parse_generics_type_process_consumed_bounds! }
+                prepend {
+                    parsed_generics $parsed
+                    generic { attrs {$(#$attr)*} $name }
+                    colon { $colon }
+                }
+                append {
+                    finish $finish
+                }
+            }
+        }
+    };
+    // T
+    (
+        $parsed_generics:tt
+        { $(#[$($_attr:tt)*])* $_name:ident $($_rest:tt)* }
+        { $(#$attr:tt       )* $name:ident  $($rest:tt )* }
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_after_type_parse_bounds! {
+            parsed_generics $parsed_generics
+            generic { attrs {$(#$attr)*} $name }
+            rest {$($rest)*} {$($rest)*}
+            finish $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_lifetime_process_consumed_bounds {
+    (
+        parsed_generics {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        generic_and_colon {
+            attrs {$($($attrs:tt)+)?}
+            $lt:lifetime $colon:tt
+        }
+        consumed_bounds {$($parsed_bounds:tt)*}
+        rest $rest:tt
+        finish $finish:tt
+    ) => {
+        $crate::__parse_generics_match_one_of_comma_gt_eof! {
+            // trailing comma is added later
+            {
+                generics      { $($generics)*      $($($attrs)+)? $lt $colon $($parsed_bounds)* }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $lt $colon $($parsed_bounds)* }
+                type_generics { $($type_generics)* $($($attrs)+)? $lt                           }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $( lifetime_attrs {$($attrs)+} )?
+                        lifetime {$lt}
+                        bounds {$($parsed_bounds)*}
+                    }
+                }
+            }
+            $rest $rest
+            $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_type_process_consumed_bounds {
+    (
+        parsed_generics $parsed_generics:tt
+        generic $generic:tt
+        colon $colon:tt
+        consumed_bounds $parsed_bounds:tt
+        rest $rest:tt
+        finish $finish:tt
+    ) => {
+        $crate::__parse_generics_after_type_parse_bounds! {
+            parsed_generics $parsed_generics
+            generic $generic
+            colon $colon
+            parsed_bounds $parsed_bounds
+            rest $rest $rest
+            finish $finish
+        }
+    };
+}
+
+// without trailing comma
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_match_one_of_comma_gt_eof {
+    // eof
+    (
+        $parsed_generics:tt
+        {} $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            ,
+            {
+                on_finish { $crate::__parse_generics_end! }
+                append {
+                    $rest
+                    $finish
+                }
+            }
+        }
+    };
+    // ,
+    (
+        $parsed_generics:tt
+        {,         $($_rest:tt)*}
+        {$comma:tt $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            $comma
+            {
+                on_finish { $crate::__parse_generics! }
+                append {
+                    {$($rest)*}
+                    {$($rest)*}
+                    $finish
+                }
+            }
+        }
+    };
+    // >
+    (
+        $parsed_generics:tt
+        {> $($_rest:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            ,
+            {
+                on_finish { $crate::__parse_generics_end! }
+                append {
+                    $rest
+                    $finish
+                }
+            }
+        }
+    };
+    // >=
+    (
+        $parsed_generics:tt
+        {>= $($_rest:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            ,
+            {
+                on_finish { $crate::__parse_generics_end! }
+                append {
+                    $rest
+                    $finish
+                }
+            }
+        }
+    };
+    // >>
+    (
+        $parsed_generics:tt
+        {>> $($_rest:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            ,
+            {
+                on_finish { $crate::__parse_generics_end! }
+                append {
+                    $rest
+                    $finish
+                }
+            }
+        }
+    };
+    // >>=
+    (
+        parsed_generics $parsed_generics:tt
+        {>>= $($_rest:tt)*}
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_append_trailing_comma! {
+            $parsed_generics
+            ,
+            {
+                on_finish { $crate::__parse_generics_end! }
+                append {
+                    $rest
+                    $finish
+                }
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_append_trailing_comma {
+    (
+        {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info $generics_info:tt
+        }
+        $comma:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                {
+                    generics { $($generics)* $comma }
+                    impl_generics { $($impl_generics)* $comma }
+                    type_generics { $($type_generics)* $comma }
+                    generics_info $generics_info
+                }
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_end {
+    (
+        $parsed_generics:tt
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics $parsed_generics
+                rest $rest
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_after_type_parse_bounds {
+    (
+        parsed_generics $parsed_generics:tt
+        generic $generic:tt
+        $(
+            colon $colon:tt
+            parsed_bounds $parsed_bounds:tt
+        )?
+        rest
+        {=      $($_rest:tt)*}
+        {$eq:tt $($rest:tt )*}
+        finish $finish:tt
+    ) => {
+        $crate::__parse_generics_match_default_type! {
+            {
+                parsed_generics $parsed_generics
+                generic $generic
+                $(
+                    colon $colon
+                    parsed_bounds $parsed_bounds
+                )?
+                eq {$eq}
+            }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    (
+        parsed_generics {
+            generics { $($generics:tt)* }
+            impl_generics { $($impl_generics:tt)* }
+            type_generics { $($type_generics:tt)* }
+            generics_info { $($generics_info:tt)* }
+        }
+        generic {
+            attrs {$($($attrs:tt)+)?}
+            $name:ident
+        }
+        $(
+            colon {$colon:tt}
+            parsed_bounds {$($parsed_bounds:tt)*}
+        )?
+        rest $rest:tt $_rest:tt
+        finish $finish:tt
+    ) => {
+        $crate::__parse_generics_match_one_of_comma_gt_eof! {
+            {
+                generics      { $($generics)*      $($($attrs)+)? $name $($colon $($parsed_bounds)*)? }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $name $($colon $($parsed_bounds)*)? }
+                type_generics { $($type_generics)* $($($attrs)+)? $name                               }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(type_attrs { $($attrs)+ })?
+                        name { $name }
+                        $(bounds { $($parsed_bounds)* })?
+                    }
+                }
+            }
+            $rest
+            $_rest
+            $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_match_default_type {
+    // ,
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $name:ident
+            }
+            $(
+                colon {$colon:tt}
+                parsed_bounds { $($parsed_bounds:tt)* }
+            )?
+            eq {$eq:tt}
+        }
+        $_rest:tt
+        {$ty:ty $(, $($rest:tt)* )?}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics! {
+            {
+                generics      { $($generics)*      $($($attrs)+)? $name $($colon $($parsed_bounds)*)? $eq $ty , }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $name $($colon $($parsed_bounds)*)?         , }
+                type_generics { $($type_generics)* $($($attrs)+)? $name                                       , }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(type_attrs { $($attrs)+ })?
+                        name { $name }
+                        $(bounds { $($parsed_bounds)* })?
+                        default_ty { $ty }
+                    }
+                }
+            }
+            {$($($rest)*)?}
+            {$($($rest)*)?}
+            $finish
+        }
+    };
+    // >
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $name:ident
+            }
+            $(
+                colon {$colon:tt}
+                parsed_bounds { $($parsed_bounds:tt)* }
+            )?
+            eq {$eq:tt}
+        }
+        {$ty:ty > $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($($attrs)+)? $name $($colon $($parsed_bounds)*)? $eq $ty , }
+                    impl_generics { $($impl_generics)* $($($attrs)+)? $name $($colon $($parsed_bounds)*)?         , }
+                    type_generics { $($type_generics)* $($($attrs)+)? $name                                       , }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(type_attrs { $($attrs)+ })?
+                            name { $name }
+                            $(bounds { $($parsed_bounds)* })?
+                            default_ty { $ty }
+                        }
+                    }
+                }
+                rest {> $($rest)*}
+            }
+        }
+    };
+    // >>
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $name:ident
+            }
+            $(
+                colon {$colon:tt}
+                parsed_bounds { $($parsed_bounds:tt)* }
+            )?
+            eq {$eq:tt}
+        }
+        {$ty:ty >> $($rest:tt)*}
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($($attrs)+)? $name $($colon $($parsed_bounds)*)? $eq $ty , }
+                    impl_generics { $($impl_generics)* $($($attrs)+)? $name $($colon $($parsed_bounds)*)?         , }
+                    type_generics { $($type_generics)* $($($attrs)+)? $name                                       , }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(type_attrs { $($attrs)+ })?
+                            name { $name }
+                            $(bounds { $($parsed_bounds)* })?
+                            default_ty { $ty }
+                        }
+                    }
+                }
+                rest {>> $($rest)*}
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_generics_match_default_expr {
+    // we cannot match $expr or `const N: usize = 1>` will be wrongly parsed
+    // $path ,
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $const:ident $name:ident
+            }
+            colon {$colon:tt}
+            ty {$ty:ty}
+            eq {$eq:tt}
+        }
+        $_rest:tt
+        {$expr:path $(, $($rest:tt)* )?}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics! {
+            {
+                generics      { $($generics)*      $($($attrs)+)? $const $name $colon $ty $eq $expr , }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $const $name $colon $ty           , }
+                type_generics { $($type_generics)* $($($attrs)+)?        $name                      , }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(const_attrs { $($attrs)+ })?
+                        const {$const}
+                        name { $name }
+                        bounds { $ty }
+                        default_expr { $expr }
+                    }
+                }
+            }
+            {$($($rest)*)?}
+            {$($($rest)*)?}
+            $finish
+        }
+    };
+    // $path >
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $const:ident $name:ident
+            }
+            colon {$colon:tt}
+            ty {$ty:ty}
+            eq {$eq:tt}
+        }
+        $_rest:tt
+        {$expr:path > $($rest:tt)*}
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($($attrs)+)? $const $name $colon $ty $eq $expr , }
+                    impl_generics { $($impl_generics)* $($($attrs)+)? $const $name $colon $ty           , }
+                    type_generics { $($type_generics)* $($($attrs)+)?        $name                      , }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(const_attrs { $($attrs)+ })?
+                            const {$const}
+                            name { $name }
+                            bounds { $ty }
+                            default_expr { $expr }
+                        }
+                    }
+                }
+                rest { > $($rest)* }
+            }
+        }
+    };
+    // $path >>
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $const:ident $name:ident
+            }
+            colon {$colon:tt}
+            ty {$ty:ty}
+            eq {$eq:tt}
+        }
+        $_rest:tt
+        {$expr:path >> $($rest:tt)*}
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                parsed_generics {
+                    generics      { $($generics)*      $($($attrs)+)? $const $name $colon $ty $eq $expr , }
+                    impl_generics { $($impl_generics)* $($($attrs)+)? $const $name $colon $ty           , }
+                    type_generics { $($type_generics)* $($($attrs)+)?        $name                      , }
+                    generics_info {
+                        $($generics_info)*
+                        {
+                            $(const_attrs { $($attrs)+ })?
+                            const {$const}
+                            name { $name }
+                            bounds { $ty }
+                            default_expr { $expr }
+                        }
+                    }
+                }
+                rest { >> $($rest)* }
+            }
+        }
+    };
+    // {..}
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $const:ident $name:ident
+            }
+            colon {$colon:tt}
+            ty {$ty:ty}
+            eq {$eq:tt}
+        }
+        {{$($_expr:tt)*} $($_rest:tt)*}
+        {$expr:tt        $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_match_one_of_comma_gt_eof! {
+            {
+                generics      { $($generics)*      $($($attrs)+)? $const $name $colon $ty $eq $expr }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $const $name $colon $ty           }
+                type_generics { $($type_generics)* $($($attrs)+)?        $name                      }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(const_attrs { $($attrs)+ })?
+                        const {$const}
+                        name { $name }
+                        bounds { $ty }
+                        default_expr { $expr }
+                    }
+                }
+            }
+            { $($rest)* }
+            { $($rest)* }
+            $finish
+        }
+    };
+    // $literal
+    (
+        {
+            parsed_generics {
+                generics { $($generics:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info { $($generics_info:tt)* }
+            }
+            generic {
+                attrs {$($($attrs:tt)+)?}
+                $const:ident $name:ident
+            }
+            colon {$colon:tt}
+            ty {$ty:ty}
+            eq {$eq:tt}
+        }
+        {$_expr:literal $($_rest:tt)*}
+        {$expr:literal  $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics_match_one_of_comma_gt_eof! {
+            {
+                generics      { $($generics)*      $($($attrs)+)? $const $name $colon $ty $eq $expr }
+                impl_generics { $($impl_generics)* $($($attrs)+)? $const $name $colon $ty           }
+                type_generics { $($type_generics)* $($($attrs)+)?        $name                      }
+                generics_info {
+                    $($generics_info)*
+                    {
+                        $(const_attrs { $($attrs)+ })?
+                        const {$const}
+                        name { $name }
+                        bounds { $ty }
+                        default_expr { $expr }
+                    }
+                }
+            }
+            { $($rest)* }
+            { $($rest)* }
+            $finish
+        }
+    };
+}
+
+// endregion
+
+// region: parse_optional_angle_bracketed_generics
+
+/// Parse an optional angle bracketed generics `<'a, T, const N: usize>`
+///
+/// See also [`parse_generics!`].
+///
+/// ### Examples:
+///
+/// #### no angle bracketed generics
+///
+/// ```
+/// macro_rules! expect_no_generics {
+///     (rest { () -> u8 {} }) => {};
+/// }
+/// syn_lite::parse_optional_angle_bracketed_generics! {
+///     on_finish {expect_no_generics!}
+///     input { () -> u8 {} }
+/// }
+/// ```
+///
+/// #### empty generics
+///
+/// ```
+/// macro_rules! expect {
+///     (
+///         lt {<}
+///         parsed_generics {
+///             generics {}
+///             impl_generics {}
+///             type_generics {}
+///             generics_info {}
+///         }
+///         gt {>}
+///         rest { () -> u8 {} }
+///     ) => {};
+/// }
+/// syn_lite::parse_optional_angle_bracketed_generics! {
+///     on_finish {expect!}
+///     input { <>() -> u8 {} }
+/// }
+/// ```
+///
+/// #### lifetime generics
+///
+/// ```
+/// macro_rules! expect {
+///     (
+///         lt {<}
+///         parsed_generics {
+///             generics {'a,}
+///             impl_generics {'a,}
+///             type_generics {'a,}
+///             generics_info {
+///                 { lifetime {'a} }
+///             }
+///         }
+///         gt {>}
+///         rest { () ->&'a str {} }
+///     ) => {};
+/// }
+/// syn_lite::parse_optional_angle_bracketed_generics! {
+///     on_finish {expect!}
+///     input { <'a>() -> &'a str {} }
+/// }
+/// ```
+#[macro_export]
+macro_rules! parse_optional_angle_bracketed_generics {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__impl_parse_optional_angle_bracketed_generics_start! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_optional_angle_bracketed_generics_start {
+    // <>
+    (
+        {}
+        {<      >      $($_rest:tt)*}
+        {$lt:tt $gt:tt $($rest:tt)*}
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                lt {$lt}
+                parsed_generics {
+                    generics {}
+                    impl_generics {}
+                    type_generics {}
+                    generics_info {}
+                }
+                gt {$gt}
+                rest { $($rest)* }
+            }
+        }
+    };
+    // <
+    (
+        {}
+        {<      $($_rest:tt)*}
+        {$lt:tt $($rest:tt)*}
+        $finish:tt
+    ) => {
+        $crate::__parse_generics! {
+            {
+                generics {}
+                impl_generics {}
+                type_generics {}
+                generics_info {}
+            }
+            {$($rest)*}
+            {$($rest)*}
+            {
+                on_finish { $crate::__impl_parse_optional_angle_bracketed_generics_after_parse_generics! }
+                prepend {
+                    on_finish $finish
+                    lt {$lt}
+                }
+            }
+        }
+    };
+    // anything else
+    (
+        {}
+        $_rest:tt
+        $rest:tt
+        $finish:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                rest $rest
+            }
+        }
+    }
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __impl_parse_optional_angle_bracketed_generics_after_parse_generics {
+    (
+        on_finish $finish:tt
+        lt $lt:tt
+        parsed_generics $parsed_generics:tt
+        rest $rest:tt
+    ) => {
+        $crate::__impl_split_gt_and_rest! {
+            $rest
+            $rest
+            {
+                on_finish {$crate::__resolve_finish_flat!}
+                prepend {
+                    $finish
+                    lt $lt
+                    parsed_generics $parsed_generics
+                }
+            }
+        }
+    };
+}
+
+// endregion
+
+// region: parse_item_fn
+
+/// Parse an item fn
+///
+/// Example:
+///
+/// ```
+/// macro_rules! expect_item_fn {
+///     (
+///         item_fn {
+///             $(outer_attrs { #[cfg(..)] })? // present if there are outer attributes
+///             vis {$vis:tt}
+///             sig {
+///                                       // the following keywords are present if specified
+///                 $(default {default})?
+///                 $(const   {const}  )?
+///                 $(async   {async}  )?
+///                 $(unsafe  {unsafe} )?
+///                 $(extern  {extern $($extern_name:literal)?})?
+///
+///                 fn { fn }
+///                 ident { get }
+///
+///                 $(                                   // present if there is `<...>`
+///                     lt {<}
+///                     parsed_generics $parsed_generics:tt
+///                     gt {>}
+///                 )?
+///
+///                 paren_inputs { (self) }
+///                 output { $(-> $output_ty:ty)? }
+///
+///                 $(                                      // present if there is where clause
+///                     where_clause { where $($where_clause:tt)* }
+///                 )?
+///             }
+///                                  // either block or semicolon will be present
+///             $(block { {..} })?   // present if there is a block as fn body
+///             $(semicolon { ; })?  // present if there is a semicolon
+///         }
+///         rest {}
+///     ) => {};
+/// }
+///
+/// syn_lite::parse_item_fn! {
+///     on_finish { expect_item_fn! }
+///     input {
+///         #[cfg(..)]
+///         fn get<T>(self) -> Option<T>
+///         where
+///             Self: Sized,
+///         {
+///             ..
+///         }
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! parse_item_fn {
+    ($($args:tt)*) => {
+        $crate::__start_parsing_with! {
+            parse_with { $crate::__parse_item_fn_start! }
+            args {
+                $($args)*
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_start {
+    (
+        {}
+        {
+            $($(#$outer_attrs:tt)+)?
+            $vis:vis
+            $keyword:ident
+            $($rest:tt)*
+        }
+        $_rest:tt
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            {}
+            { $keyword $($rest)* }
+            { $keyword $($rest)* }
+            {
+                on_finish {$crate::__parse_item_fn_after_sig!}
+                prepend {
+                    on_finish $finish
+                    before_sig {
+                        $(outer_attrs {$(#$outer_attrs)+})?
+                        vis {$vis}
+                    }
+                }
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_after_sig {
+    (
+        on_finish $finish:tt
+        before_sig {$($before_sig:tt)*}
+        sig $sig:tt
+        rest $rest:tt
+    ) => {
+        $crate::__parse_item_fn_block_or_semi! {
+            $finish
+            {
+                $($before_sig)*
+                sig $sig
+            }
+            $rest
+            $rest
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_block_or_semi {
+    (
+        $finish:tt
+        {$($parsed_fn:tt)*}
+        {;             $($_rest:tt)*}
+        {$semicolon:tt $( $rest:tt)*}
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                item_fn {
+                    $($parsed_fn)*
+                    semicolon {$semicolon}
+                }
+                rest {$($rest)*}
+            }
+        }
+    };
+    (
+        $finish:tt
+        {$($parsed_fn:tt)*}
+        {{$($_block:tt)*} $($_rest:tt)*}
+        {$block:tt        $( $rest:tt)*}
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                item_fn {
+                    $($parsed_fn)*
+                    block {$block}
+                }
+                rest {$($rest)*}
+            }
+        }
+    };
+}
+
+// keyword order for functions declaration is `pub`, `default`, `const`, `async`, `unsafe`, `extern`
+//
+// this macro doesn't check the order
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature {
+    (
+        {$($parsed_sig:tt)*}
+        { fn     $_ident:ident $($_rest:tt)*}
+        { $fn:tt $ident:ident  $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__impl_parse_optional_angle_bracketed_generics_start! {
+            {}
+            {$($rest)*}
+            {$($rest)*}
+            {
+                on_finish {$crate::__parse_item_fn_signature_process_abg!}
+                prepend {
+                    finish $finish
+                    parsed_sig {
+                        $($parsed_sig)*
+                        fn {$fn}
+                        ident {$ident}
+                    }
+                }
+            }
+        }
+    };
+    (
+        {$($parsed_sig:tt)*}
+        { default        $($_rest:tt)*}
+        { $default:ident $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            { $($parsed_sig)* default {$default} }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    (
+        {$($parsed_sig:tt)*}
+        { const        $($_rest:tt)*}
+        { $const:ident $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            { $($parsed_sig)* const {$const} }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    (
+        {$($parsed_sig:tt)*}
+        { async        $($_rest:tt)*}
+        { $async:ident $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            { $($parsed_sig)* async {$async} }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    (
+        {$($parsed_sig:tt)*}
+        { unsafe        $($_rest:tt)*}
+        { $unsafe:ident $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            { $($parsed_sig)* unsafe {$unsafe} }
+            {$($rest)*}
+            {$($rest)*}
+            $finish
+        }
+    };
+    (
+        {$($parsed_sig:tt)*}
+        { extern        $($_name:literal)? $_other:ident $($_rest:tt)*}
+        { $extern:ident $($name:literal )? $other:ident  $($rest:tt )*}
+        $finish:tt
+    ) => {
+        $crate::__parse_item_fn_signature! {
+            { $($parsed_sig)* extern {$extern $($name)?} }
+            {$other $($rest)*}
+            {$other $($rest)*}
+            $finish
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature_process_abg {
+    (
+        finish $finish:tt
+        parsed_sig { $($parsed_sig:tt)* }
+        $(
+            lt $lt:tt
+            parsed_generics $parsed_generics:tt
+            gt $gt:tt
+        )?
+        rest $rest:tt
+    ) => {
+        $crate::__parse_item_fn_signature_after_generics! {
+            $finish
+            {
+                $($parsed_sig)*
+                $(
+                    lt $lt
+                    parsed_generics $parsed_generics
+                    gt $gt
+                )?
+            }
+            $rest $rest
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature_after_generics {
+    (
+        $finish:tt
+        { $($parsed_sig:tt)* }
+        { ($($inputs:tt)*) ->        $($_output_ty_and_rest:tt)* }
+        { $paren_inputs:tt $arrow:tt $($output_ty_and_rest:tt )* }
+    ) => {
+        $crate::__impl_consume_bounds! {
+            { $arrow }
+            { $($output_ty_and_rest)* }
+            { $($output_ty_and_rest)* }
+            {
+                on_finish {$crate::__parse_item_fn_signature_process_consumed_bounds_as_type!}
+                prepend {
+                    on_finish $finish
+                    parsed_sig {
+                        $($parsed_sig)*
+                        paren_inputs {$paren_inputs}
+                    }
+                }
+            }
+        }
+    };
+    (
+        $finish:tt
+        { $($parsed_sig:tt)* }
+        { ($($inputs:tt)*) where     $($_where_predicates_and_rest:tt)*}
+        { $paren_inputs:tt $where:tt $( $where_predicates_and_rest:tt)*}
+    ) => {
+        $crate::__consume_where_predicates! {
+            {
+                on_finish {$crate::__parse_item_fn_signature_process_consumed_where_predicates!}
+                prepend {
+                    finish $finish
+                    parsed_sig {
+                        $($parsed_sig)*
+                        paren_inputs {$paren_inputs}
+                        output {}
+                    }
+                }
+            }
+            {$where}
+            {$($where_predicates_and_rest)*}
+            {$($where_predicates_and_rest)*}
+        }
+    };
+    (
+        $finish:tt
+        { $($parsed_sig:tt)* }
+        { ($($inputs:tt)*)  $($_rest:tt)*}
+        { $paren_inputs:tt  $( $rest:tt)*}
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                sig {
+                    $($parsed_sig)*
+                    paren_inputs {$paren_inputs}
+                    output {}
+                }
+                rest {$($rest)*}
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature_process_consumed_bounds_as_type {
+    (
+        on_finish $finish:tt
+        parsed_sig {$($parsed_sig:tt)*}
+        consumed_bounds $output:tt
+        rest $rest:tt
+    ) => {
+        $crate::__parse_item_fn_signature_consume_optional_where_clause! {
+            $finish
+            { $($parsed_sig)* output $output }
+            $rest
+            $rest
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature_consume_optional_where_clause {
+    (
+        $finish:tt
+        $parsed_sig:tt
+        { where     $($_where_predicates_and_rest:tt)* }
+        { $where:tt $( $where_predicates_and_rest:tt)* }
+    ) => {
+        $crate::__consume_where_predicates! {
+            {
+                on_finish {$crate::__parse_item_fn_signature_process_consumed_where_predicates!}
+                prepend {
+                    finish $finish
+                    parsed_sig $parsed_sig
+                }
+            }
+            {$where}
+            {$($where_predicates_and_rest)*}
+            {$($where_predicates_and_rest)*}
+        }
+    };
+    (
+        $finish:tt
+        $sig:tt
+        $_rest:tt
+        $rest:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                sig $sig
+                rest $rest
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __parse_item_fn_signature_process_consumed_where_predicates {
+    (
+        finish $finish:tt
+        parsed_sig { $($parsed_sig:tt)* }
+        consumed $where_clause:tt
+        rest $rest:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                sig {
+                    $($parsed_sig)*
+                    where_clause $where_clause
+                }
+                rest $rest
+            }
+        }
+    };
+}
+
+/// consume till one of the following tokens:
+/// - EOF
+/// - `;`
+/// - `{..}`
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __consume_where_predicates {
+    // EOF
+    (
+        $finish:tt
+        $consumed:tt
+        {}
+        $rest:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed $consumed
+                rest $rest
+            }
+        }
+    };
+    // ;
+    (
+        $finish:tt
+        $consumed:tt
+        {; $($_rest:tt)*}
+        $rest:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed $consumed
+                rest $rest
+            }
+        }
+    };
+    // {..}
+    (
+        $finish:tt
+        $consumed:tt
+        {{$($block:tt)*} $($_rest:tt)*}
+        $rest:tt
+    ) => {
+        $crate::__resolve_finish! {
+            on_finish $finish
+            output {
+                consumed $consumed
+                rest $rest
+            }
+        }
+    };
+    // anything else
+    (
+        $finish:tt
+        {$($consumed:tt)*}
+        $_rest:tt
+        {$t:tt $($rest:tt)*}
+    ) => {
+        $crate::__consume_where_predicates! {
+            $finish
+            {$($consumed)* $t}
+            {$($rest)*}
+            {$($rest)*}
         }
     };
 }

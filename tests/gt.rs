@@ -68,6 +68,20 @@ expect_one_token! {>>}
 expect_one_token! {>>=}
 expect_one_token! {=>}
 
+const _: () = {
+    macro_rules! match_one_gt {
+        (> $($rest:tt)*) => {
+            true
+        };
+        ($($rest:tt)*) => {
+            false
+        };
+    }
+    assert!(match_one_gt!(>));
+    assert!(match_one_gt!(> >));
+    assert!(!match_one_gt!(>>));
+};
+
 macro_rules! expect_consume_till_gt {
     (
         before_gt {AsRef<u8>}

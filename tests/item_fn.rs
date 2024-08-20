@@ -1,33 +1,50 @@
+use syn_lite::parse_item_fn;
+
+mod asserts {
+    macro_rules! vis_and_ident {
+        ($vis:vis $($ident:ident)+) => {};
+    }
+
+    vis_and_ident! {const}
+    vis_and_ident! {pub const}
+    vis_and_ident! {pub async unsafe const fn}
+    vis_and_ident! {pub(in super) const}
+
+    /*
+    // local ambiguity
+    macro_rules! vis_and_many_ident_and_rest {
+        ($vis:vis $($ident:ident)+ $($rest:tt)*) => {};
+    }
+
+    vis_and_many_ident_and_rest! {fn name() {}}
+    */
+}
+
 macro_rules! simple {
     (
-        item_fn! {
-            outer_attrs! {}
-            vis! { $vis:vis }
-            sig! {
-                ident! {simple}
-                generics! {
-                    params! {}
-                    impl_generics! {}
-                    type_generics! {}
-                    params_name! {}
-                }
-                paren_inputs! {()}
-                output! {}
-                where_clause! {}
+        item_fn {
+            vis { $vis:vis }
+            sig {
+                fn {fn}
+                ident {simple}
+                paren_inputs {()}
+                output {}
             }
-            inner_attrs! {}
-            stmts! {}
+            block {{}}
         }
-        rest! {
+        rest {
             pub mod simple;
         }
     ) => {};
 }
 
-syn_lite::parse_item_fn!({
-    pub fn simple() {}
-    pub mod simple;
-} => simple!);
+parse_item_fn! {
+    on_finish {simple!}
+    input {
+        pub fn simple() {}
+        pub mod simple;
+    }
+}
 
 #[test]
 fn simple_with_where() {
@@ -37,25 +54,19 @@ fn simple_with_where() {
 
     macro_rules! simple_with_where {
         (
-            item_fn! {
-                outer_attrs! {}
-                vis! { $vis:vis }
-                sig! {
-                    ident! {simple}
-                    generics! {
-                        params! {}
-                        impl_generics! {}
-                        type_generics! {}
-                        params_name! {}
-                    }
-                    paren_inputs! {()}
-                    output! {}
-                    where_clause! { where $str_ty:ty : $sized:path }
+            item_fn {
+                outer_attrs { #[doc = r" simple"] }
+                vis { $vis:vis }
+                sig {
+                    fn {fn}
+                    ident {simple}
+                    paren_inputs {()}
+                    output {}
+                    where_clause { where $str_ty:ty : $sized:path }
                 }
-                inner_attrs! {}
-                stmts! {}
+                block {{}}
             }
-            rest! {
+            rest {
                 pub mod simple;
             }
         ) => {
@@ -65,10 +76,14 @@ fn simple_with_where() {
         };
     }
 
-    syn_lite::parse_item_fn!({
-        pub fn simple() where str: Sized {}
-        pub mod simple;
-    } => simple_with_where!);
+    parse_item_fn!(
+        on_finish {simple_with_where!}
+        input {
+            /// simple
+            pub fn simple() where str: Sized {}
+            pub mod simple;
+        }
+    );
 
     assert_eq!(vis, "pub ");
     assert_eq!(str_ty, "str");

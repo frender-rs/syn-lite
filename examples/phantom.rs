@@ -1,40 +1,52 @@
 //! define structs and impl Default
 
-use syn_lite::{expand_if_else, parse_generics};
-
-macro_rules! __impl_phantom_data_with_params_name {
-    ($(
-        $($lt:lifetime)?
-        $($tp0:ident $($tp1:ident)? )?
-    ),+) => {
-        ($(
-            $(& $lt ())?
-            $(
-                expand_if_else![[$($tp1)?] {()} {::core::marker::PhantomData<$tp0>}]
-            )?
-        ),+)
-    };
-}
+use syn_lite::expand_if_else;
 
 macro_rules! __impl_phantom {
     (
         $vis:vis $name:ident
-        generics! {
-            params!        { $($params:tt)* }
-            impl_generics! { $($impl_generics:tt)* }
-            type_generics! { $($type_generics:tt)* }
-            params_name!   $params_name:tt
-        }
-        rest! {;}
+        $(
+            lt {$lt:tt}
+            parsed_generics {
+                generics      { $($params:tt)* }
+                impl_generics { $($impl_generics:tt)* }
+                type_generics { $($type_generics:tt)* }
+                generics_info {
+                    $({
+                        $(lifetime_attrs $lifetime_attrs:tt)?
+                        lifetime {$lifetime:lifetime}
+                        $(bounds {$($lifetime_bounds:tt)*})?
+                    })*
+                    $({
+                        $(const_attrs $const_attrs:tt)?
+                        $(type_attrs $type_attrs:tt)?
+                        $(const $const:tt)?
+                        name {$generic_name:ident}
+                        $(bounds {$($generic_bounds:tt)*})?
+                        $(default_ty $default_ty:tt)?
+                        $(default_expr $default_expr:tt)?
+                    })*
+                }
+            }
+            gt {$gt:tt}
+        )?
+        rest {;}
     ) => {
-        $vis struct $name <$($params)*> {
-            #[allow(unused_parens)]
-            _phantom: ::core::marker::PhantomData<
-                __impl_phantom_data_with_params_name! $params_name
-            >
+        $vis struct $name $($lt $($params)* $gt)? {
+            _phantom: ::core::marker::PhantomData<(
+                $($(::core::marker::PhantomData<&$lifetime ()>,)*)?
+                $($(
+                    syn_lite::expand_if_else! {
+                        [$($const)?]
+                        {()} // for const generics
+                        {::core::marker::PhantomData<$generic_name>} // for type params
+                    }
+                    ,
+                )*)?
+            )>
         }
 
-        impl<$($impl_generics)*> ::core::default::Default for $name <$($type_generics)*> {
+        impl $($lt $($impl_generics)* $gt)?  ::core::default::Default for $name $($lt $($type_generics)* $gt)? {
             fn default() -> Self {
                 Self { _phantom: ::core::marker::PhantomData }
             }
@@ -47,11 +59,10 @@ macro_rules! phantom {
         $vis:vis struct $name:ident
         $($generics_and_where_and_semi:tt)*
     ) => {
-        parse_generics! {
-            [$vis $name]
-            {
-                $($generics_and_where_and_semi)*
-            } => __impl_phantom!
+        syn_lite::parse_optional_angle_bracketed_generics! {
+            on_finish { __impl_phantom! }
+            prepend { $vis $name }
+            input { $($generics_and_where_and_semi)* }
         }
     };
 }
