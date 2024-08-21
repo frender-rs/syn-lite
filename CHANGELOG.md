@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.2.0...syn-lite-v0.3.0) (2024-08-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove parse_inner_attrs!
+* remove parse_where_clause!
+* changed parse_generics and parse_item_fn
+
+### Features
+
+* changed parse_generics and parse_item_fn ([b53e726](https://github.com/frender-rs/syn-lite/commit/b53e72693b885ff6ea20b26b235eb719ab285bfa))
+* consume_inner_attrs! ([25e9882](https://github.com/frender-rs/syn-lite/commit/25e98823c917c938331fc5da1758961334c443b0))
+* consume_optional_where_clause! ([f088a78](https://github.com/frender-rs/syn-lite/commit/f088a781ab3134f4780c43b73e537c1c722d667e))
+* remove parse_inner_attrs! ([9b2c272](https://github.com/frender-rs/syn-lite/commit/9b2c272671041e708371176003c7930a09d3ed8b))
+* remove parse_where_clause! ([b3e4180](https://github.com/frender-rs/syn-lite/commit/b3e4180a8bc94bb0a1e7da1e580f82def66cc707))
+
 ## [0.2.0](https://github.com/frender-rs/syn-lite/compare/syn-lite-v0.1.2...syn-lite-v0.2.0) (2024-08-13)
 
 
